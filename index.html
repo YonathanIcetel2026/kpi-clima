@@ -1,0 +1,1101 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>KPI Clima DCSM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+html,body{margin:0}[hidden]{display:none!important}
+/* Layout: tablero de sala de control — franja de KPIs, desglose por sala/tipo, tabla de equipos y panel lateral de registro */
+:root{
+  --bg:#f3f5f7; --panel:#ffffff; --ink:#15212b; --muted:#5b6b78; --line:#d9e0e6; --soft:#e9eef2;
+  --accent:#0b6e8a; --accent-ink:#ffffff;
+  --ok:#1d8a4e; --warn:#c07a00; --crit:#c2362b; --off:#7b8790; --na:#aab4bc;
+  --ok-bg:#e3f4ea; --warn-bg:#fbf0d9; --crit-bg:#fbe5e2; --off-bg:#eceff1;
+  --f-display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f161c; --panel:#162029; --ink:#e4ebf0; --muted:#93a3b0; --line:#26343f; --soft:#1c2832;
+  --accent:#3fb3d3; --accent-ink:#06222b;
+  --ok:#43c07a; --warn:#e3a43a; --crit:#ef6b5f; --off:#8794a0; --na:#4d5b66;
+  --ok-bg:#15301f; --warn-bg:#352812; --crit-bg:#3a1a17; --off-bg:#222c35; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f161c; --panel:#162029; --ink:#e4ebf0; --muted:#93a3b0; --line:#26343f; --soft:#1c2832;
+  --accent:#3fb3d3; --accent-ink:#06222b;
+  --ok:#43c07a; --warn:#e3a43a; --crit:#ef6b5f; --off:#8794a0; --na:#4d5b66;
+  --ok-bg:#15301f; --warn-bg:#352812; --crit-bg:#3a1a17; --off-bg:#222c35; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:14px/1.5 var(--f-body)}
+.wrap{max-width:1280px;margin:0 auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:20px}
+header.top{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-end;justify-content:space-between}
+.eyebrow{font:500 12px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+h1{font:700 34px/1.05 var(--f-display);letter-spacing:.01em;margin:6px 0 0;text-wrap:balance}
+h2{font:600 20px/1.1 var(--f-display);letter-spacing:.02em;margin:0;text-transform:uppercase}
+.sync{font:12px var(--f-mono);color:var(--muted);display:flex;align-items:center;gap:8px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--na);display:inline-block}
+.dot.live{background:var(--ok)}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+button,.btn{font:500 13px var(--f-body);border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:7px 12px;border-radius:6px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button.danger{color:var(--crit)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,tr:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button:disabled{opacity:.5;cursor:not-allowed}
+
+/* KPI strip */
+.kpis{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,2fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.kpi{background:var(--panel);padding:14px 16px;display:grid;gap:4px;align-content:start}
+.kpi .lbl{font:500 11px/1.2 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.kpi .val{font:600 40px/1 var(--f-display);font-variant-numeric:tabular-nums}
+.kpi .val small{font-size:20px;color:var(--muted);font-weight:500}
+.kpi .sub{font-size:12px;color:var(--muted)}
+.kpi.main .val{color:var(--accent)}
+.meter{height:6px;border-radius:3px;background:var(--soft);overflow:hidden}
+.meter i{display:block;height:100%;background:var(--accent)}
+
+.stack{display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--soft)}
+.stack i{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:10px;height:10px;border-radius:2px;display:inline-block}
+
+.grid2{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:20px}
+@media (max-width:860px){.grid2{grid-template-columns:minmax(0,1fr)}}
+section.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;display:grid;gap:12px;min-width:0;align-content:start}
+.card-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.hint{font-size:12px;color:var(--muted)}
+.bars{display:grid;gap:6px;max-height:360px;overflow:auto;padding-right:4px}
+.bar{display:grid;grid-template-columns:minmax(0,150px) minmax(0,1fr) 48px;gap:10px;align-items:center;font-size:13px}
+.bar .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar .n button{all:unset;cursor:pointer}
+.bar .n button:hover{color:var(--accent);text-decoration:underline}
+.bar .t{height:14px;background:var(--soft);border-radius:3px;overflow:hidden;position:relative}
+.bar .t i{position:absolute;inset:0 auto 0 0;border-radius:3px}
+.bar .v{font:500 12px var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
+
+@media (max-width:900px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.kpi.slide{grid-column:1 / -1}}
+/* Carrusel de fallas comunes */
+.kpi.slide{gap:8px}
+.sl-h{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.sl-nav{display:flex;align-items:center;gap:6px;font:11px var(--f-mono);color:var(--muted)}
+.sl-nav button{padding:2px 9px;font-size:14px;line-height:1.3}
+.sl-body{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 14px;align-items:center}
+.sl-name{font:600 18px/1.1 var(--f-display);text-transform:uppercase;letter-spacing:.02em;grid-column:1 / -1}
+.sl-body .val{color:var(--crit)}
+.chips{display:flex;flex-wrap:wrap;gap:4px;max-height:74px;overflow:auto;grid-column:1 / -1}
+.chip{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:5px;font:500 11px var(--f-mono);border:1px solid var(--line);border-radius:99px;padding:2px 8px}
+.chip:hover,.chip:focus-visible{border-color:var(--accent);color:var(--accent)}
+.chip i{width:7px;height:7px;border-radius:50%;display:inline-block}
+.sl-dots{display:flex;gap:5px}
+.sl-dots button{all:unset;cursor:pointer;width:7px;height:7px;border-radius:50%;background:var(--line)}
+.sl-dots button[aria-current=true]{background:var(--accent)}
+/* Inconsistencias */
+.incs{display:grid;gap:3px;font-size:12px;margin:2px 0 0;padding:0;list-style:none}
+.incs li{color:var(--crit);overflow-wrap:anywhere}
+.incs li span{color:var(--muted);font-family:var(--f-mono);font-size:11px}
+/* Gráfica inicial */
+.hero-grid{display:grid;grid-template-columns:minmax(0,350px) minmax(0,1fr);gap:24px;align-items:center}
+@media (max-width:640px){.hero-grid{grid-template-columns:minmax(0,1fr)}}
+.donut-box{display:grid;grid-template-columns:130px minmax(0,1fr);gap:14px;align-items:center}
+@media (max-width:900px){.donut-box{grid-template-columns:minmax(0,1fr)}.donut-box svg{max-width:140px;margin:0 auto}}
+.donut-box svg{width:100%;height:auto;display:block}
+.dleg{display:grid;gap:7px;font-size:13px}
+.dleg div{display:grid;grid-template-columns:12px minmax(0,1fr) auto auto;gap:6px;align-items:center}
+.dleg span{min-width:0;overflow-wrap:anywhere}
+.dleg b{font:600 13px var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
+.dleg em{font:12px var(--f-mono);color:var(--muted);font-style:normal;min-width:38px;text-align:right}
+.trend{display:grid;gap:8px;min-width:0;position:relative}
+.trend svg{width:100%;height:220px;display:block;overflow:visible}
+.trend .ax{font:11px var(--f-mono);fill:var(--muted)}
+.trend .gl{stroke:var(--line);stroke-width:1}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);font:12px var(--f-body);padding:6px 9px;border-radius:6px;white-space:nowrap;z-index:5;transform:translate(-50%,-110%)}
+.seg-sm{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg-sm button{border:0;border-radius:0;padding:5px 10px;font-size:12px;background:var(--panel)}
+.seg-sm button+button{border-left:1px solid var(--line)}
+.seg-sm button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
+.kpi .delta{font:500 12px var(--f-mono)}
+
+/* Observación por turno */
+.obs{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;max-height:460px;overflow:auto}
+.ob{border:1px solid var(--line);border-left-width:4px;border-radius:6px;padding:10px 12px;display:grid;gap:4px;cursor:pointer;background:var(--panel);text-align:left;font:inherit;color:inherit}
+.ob:hover{background:var(--soft)}
+.ob.f{border-left-color:var(--crit)}.ob.r{border-left-color:var(--ok)}.ob.o{border-left-color:var(--warn)}
+.ob .top{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.ob .tg{font:600 14px var(--f-mono)}
+.ob .when{font:11px var(--f-mono);color:var(--muted);white-space:nowrap}
+.ob .k{font-size:12px;font-weight:600}
+.ob .k.f{color:var(--crit)}.ob .k.r{color:var(--ok)}.ob .k.o{color:var(--warn)}
+.ob p{margin:0;font-size:12px;color:var(--muted);overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+
+/* Sala: formatos */
+.mosaic{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.tile{all:unset;box-sizing:border-box;cursor:pointer;border-radius:6px;padding:10px 12px;display:grid;gap:2px;border:1px solid var(--line);min-width:0}
+.tile:focus-visible{outline:2px solid var(--accent)}
+.tile .sn{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile .sv{font:600 28px/1 var(--f-display);font-variant-numeric:tabular-nums}
+.tile .ss{font-size:11px;color:var(--muted)}
+.t-ok{background:var(--ok-bg)}.t-ok .sv{color:var(--ok)}
+.t-warn{background:var(--warn-bg)}.t-warn .sv{color:var(--warn)}
+.t-crit{background:var(--crit-bg)}.t-crit .sv{color:var(--crit)}
+.dots{display:grid;gap:4px;max-height:520px;overflow:auto}
+.drow{display:grid;grid-template-columns:minmax(0,170px) 46px minmax(0,1fr);gap:10px;align-items:center;padding:4px 0;border-bottom:1px solid var(--line)}
+.drow:last-child{border-bottom:0}
+.drow .n button{all:unset;cursor:pointer;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.drow .n button:hover{color:var(--accent);text-decoration:underline}
+.drow .v{font:500 12px var(--f-mono);text-align:right}
+.drow .eqs{display:flex;flex-wrap:wrap;gap:3px}
+.eqd{all:unset;width:16px;height:16px;border-radius:3px;cursor:pointer}
+.eqd:hover,.eqd:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
+.salatbl{width:100%;min-width:560px}
+.salatbl td,.salatbl th{padding:6px 8px;font-size:13px}
+.salatbl th{cursor:default;position:static}
+.salatbl tbody tr{cursor:pointer}
+.salatbl .stack{height:12px;min-width:120px}
+.stack i+i{border-left:2px solid var(--panel)}
+
+/* Observación: verificación por turno */
+.obs{grid-template-columns:repeat(auto-fill,minmax(270px,1fr));max-height:640px;align-items:start}
+.ob{cursor:default;align-content:start}
+.ob:hover{background:var(--panel)}
+.ob .tg button{all:unset;cursor:pointer}
+.ob .tg button:hover{color:var(--accent);text-decoration:underline}
+.ob.done{border-left-color:var(--accent);background:var(--soft)}
+.vgrid{display:grid;grid-template-columns:62px repeat(var(--nt),minmax(0,1fr));gap:3px;margin-top:4px;align-items:center}
+.vh{font:10px var(--f-mono);color:var(--muted);text-align:center;letter-spacing:.04em;text-transform:uppercase}
+.vd{font:11px var(--f-mono);color:var(--muted)}
+.vd.hoy{color:var(--ink);font-weight:600}
+.vc{all:unset;box-sizing:border-box;height:26px;border-radius:4px;border:1px solid var(--line);text-align:center;font:600 13px/24px var(--f-mono);cursor:pointer;color:var(--muted)}
+.vc:hover{border-color:var(--accent)}
+.vc:focus-visible{outline:2px solid var(--accent)}
+.vc.ok{background:var(--ok-bg);color:var(--ok);border-color:var(--ok)}
+.vc.bad{background:var(--crit-bg);color:var(--crit);border:1px solid var(--crit);font-size:16px;font-weight:700;line-height:24px}
+.vc.hoy:not(.ok):not(.bad){border:1.5px dashed var(--accent);color:var(--accent)}
+.vc:disabled{opacity:.35;cursor:not-allowed}
+.obf{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px}
+.obf button{padding:5px 10px;font-size:12px}
+.closeform{display:grid;gap:6px}
+.closeform textarea{min-height:48px;font-size:13px}
+.cfg{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+.cfg select{padding:4px 6px;font-size:12px}
+.chk{display:flex!important;align-items:center;gap:8px;color:var(--ink)!important;font-size:13px!important}
+.chk input{width:auto}
+.obsnote{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;border:1px solid var(--warn);background:var(--warn-bg);border-radius:6px;padding:8px 10px;font-size:13px}
+/* Sala: mosaico con equipos */
+.mosaic2{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
+.tile2{border-radius:6px;padding:10px 12px;display:grid;gap:6px;border:1px solid var(--line);min-width:0;align-content:start}
+.tile2 .hd{display:flex;justify-content:space-between;align-items:baseline;gap:6px;min-width:0}
+.tile2 .sv{flex:none}
+.tile2 .sn{all:unset;display:block;flex:1 1 auto;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.tile2 .sn:hover{text-decoration:underline}
+.tile2 .sn:focus-visible{outline:2px solid var(--accent)}
+.tile2 .sv{font:600 24px/1 var(--f-display);font-variant-numeric:tabular-nums}
+.tile2 .ss{font-size:11px;color:var(--muted)}
+.tile2 .eqs{display:flex;flex-wrap:wrap;gap:3px}
+.tile2 .eqd{width:14px;height:14px;box-shadow:0 0 0 1px var(--panel)}
+.tile2.t-ok .sv{color:var(--ok)}.tile2.t-warn .sv{color:var(--warn)}.tile2.t-crit .sv{color:var(--crit)}
+
+/* Inventario por tipo */
+.inv{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+@media (max-width:1000px){.inv{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:520px){.inv{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.ic{all:unset;box-sizing:border-box;cursor:pointer;border:1px solid var(--line);border-radius:8px;padding:12px;display:grid;gap:6px;align-content:start;min-width:0;background:var(--panel)}
+.ic:hover{border-color:var(--accent)}
+.ic:focus-visible{outline:2px solid var(--accent)}
+.ic .in{font:600 15px/1.1 var(--f-display);text-transform:uppercase;letter-spacing:.03em}
+.ic .id{font-size:11px;color:var(--muted);line-height:1.3}
+.ic .ir{display:flex;justify-content:space-between;align-items:baseline;gap:6px}
+.ic .iv{font:600 30px/1 var(--f-display);font-variant-numeric:tabular-nums}
+.ic .ip{font:600 14px var(--f-mono)}
+.ic .stack{height:8px}
+.ic .ik{display:flex;flex-wrap:wrap;gap:2px 8px;font:11px var(--f-mono);color:var(--muted)}
+.ic .ik b{font-weight:600}
+
+/* Modo de acceso */
+.modo{font:600 11px var(--f-mono);letter-spacing:.05em;text-transform:uppercase;padding:5px 9px;border-radius:99px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.modo.admin{border-color:var(--accent);color:var(--accent)}
+.modo.turno{border-color:var(--warn);color:var(--warn)}
+
+/* Tabla */
+.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+input,select,textarea{font:14px var(--f-body);color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:7px 9px;min-width:0}
+.filters input[type=search]{flex:1 1 220px}
+.tbl-wrap{overflow:auto;max-height:70vh;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;min-width:860px;background:var(--panel)}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font:500 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--soft);position:sticky;top:0;cursor:pointer;white-space:nowrap}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--soft)}
+td.tag{font:500 13px var(--f-mono);white-space:nowrap}
+td.num{font-variant-numeric:tabular-nums;font-family:var(--f-mono);font-size:12px}
+.pill{display:inline-block;font:600 11px/1 var(--f-body);letter-spacing:.03em;padding:4px 8px;border-radius:99px;white-space:nowrap}
+.s-ok{background:var(--ok-bg);color:var(--ok)}
+.s-warn{background:var(--warn-bg);color:var(--warn)}
+.s-crit{background:var(--crit-bg);color:var(--crit)}
+.s-off{background:var(--off-bg);color:var(--off)}
+.s-na{background:transparent;color:var(--muted);border:1px dashed var(--na)}
+.cto{display:inline-flex;align-items:center;gap:6px;max-width:260px}
+.cto b{width:10px;height:10px;border-radius:50%;flex:none}
+.cto span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px;color:var(--muted)}
+.b1{background:var(--ok)}.b0{background:var(--crit)}.bna{background:transparent;border:1.5px solid var(--na)}.bx{background:var(--na)}
+.pct{display:flex;align-items:center;gap:8px}
+.pct .meter{width:56px}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+
+/* Bitácora */
+.log{display:grid;gap:0;max-height:360px;overflow:auto}
+.ev{display:grid;grid-template-columns:86px minmax(0,1fr);gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}
+.ev:last-child{border-bottom:0}
+.ev .d{font:12px var(--f-mono);color:var(--muted)}
+.ev .k{font-weight:600}
+.ev .k.f{color:var(--crit)}.ev .k.r{color:var(--ok)}.ev .k.o{color:var(--warn)}
+.ev p{margin:2px 0 0;color:var(--muted);overflow-wrap:anywhere}
+
+/* Panel lateral */
+.scrim{position:fixed;inset:0;background:rgba(10,20,28,.45);z-index:20}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100%);background:var(--panel);border-left:1px solid var(--line);z-index:21;overflow:auto;
+  padding-top:calc(16px + env(safe-area-inset-top,0px));padding-bottom:calc(24px + env(safe-area-inset-bottom,0px));padding-left:20px;padding-right:max(20px,env(safe-area-inset-right,0px));display:grid;gap:18px;align-content:start}
+.drawer h3{font:700 28px/1 var(--f-display);margin:4px 0 0}
+.dh{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+fieldset{border:1px solid var(--line);border-radius:8px;padding:12px;margin:0;display:grid;gap:10px;min-width:0}
+legend{font:600 15px var(--f-display);text-transform:uppercase;letter-spacing:.04em;padding:0 6px}
+.frow{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+label{display:grid;gap:4px;font-size:12px;color:var(--muted)}
+label input,label select,label textarea{width:100%}
+textarea{resize:vertical;min-height:60px}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg label{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:6px;padding:6px 10px;color:var(--ink);font-size:13px;cursor:pointer}
+.seg input{width:auto}
+.seg label:has(input:checked){border-color:var(--accent);background:var(--soft)}
+.ctos{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ctobox{border:1px solid var(--line);border-radius:6px;padding:10px;display:grid;gap:4px}
+.ctobox .h{display:flex;align-items:center;gap:6px;font:600 12px var(--f-mono)}
+.ctobox p{margin:0;font-size:12px;color:var(--muted);white-space:pre-line;overflow-wrap:anywhere}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:6px;font-size:13px;z-index:30;max-width:calc(100% - 32px)}
+.note{font-size:12px;color:var(--muted);border-left:3px solid var(--line);padding-left:10px}
+@media (prefers-reduced-motion:no-preference){.drawer{animation:slide .18s ease-out}@keyframes slide{from{transform:translateX(24px);opacity:.6}}}
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="eyebrow">DCSM · Climatización · 2026</div>
+      <h1>KPI equipamiento clima</h1>
+    </div>
+    <div class="actions">
+      <span class="sync" id="sync"><i class="dot" id="syncDot"></i><span id="syncTxt">Conectando…</span></span>
+      <button id="btnLogin" type="button" hidden>Iniciar sesión</button>
+      <span class="modo" id="modoBadge" hidden></span>
+      <button id="btnVista" type="button" hidden>Ver como turno</button>
+      <button id="btnNew" type="button" hidden>Nuevo equipo</button>
+      <button id="btnCsv" type="button">Exportar CSV</button>
+      <button id="btnJson" type="button">Respaldo JSON</button>
+      <label class="btn" id="importLbl" hidden style="display:inline-flex;align-items:center;cursor:pointer">Importar JSON<input id="importFile" type="file" accept=".json,application/json" hidden></label>
+    </div>
+  </header>
+
+  <section class="card">
+    <div class="card-h"><h2>Equipamiento por tipo</h2><span class="hint">Clic en un tipo para ver sus equipos en la tabla</span></div>
+    <div class="inv" id="inv"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-h"><h2>Estatus del equipamiento clima</h2><span class="hint" id="fleetHint"></span></div>
+    <div class="hero-grid">
+      <div class="donut-box"><svg id="donut" viewBox="0 0 160 160" role="img" aria-label="Distribución de equipos por estatus"></svg><div class="dleg" id="dleg"></div></div>
+      <div class="trend" id="trendBox">
+        <div class="card-h"><span class="eyebrow">Disponibilidad diaria</span>
+          <span class="seg-sm" id="trendRange"><button type="button" data-d="30" aria-pressed="true">30 días</button><button type="button" data-d="90" aria-pressed="false">90 días</button><button type="button" data-d="365" aria-pressed="false">12 meses</button></span></div>
+        <svg id="trend" role="img" aria-label="Disponibilidad diaria"></svg>
+        <div class="tip" id="tip" hidden></div>
+        <span class="hint" id="trendHint"></span>
+      </div>
+    </div>
+  </section>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="grid2">
+    <section class="card">
+      <div class="card-h"><h2>Equipos en observación</h2>
+        <span class="hint">Turnos: Mañana · Tarde · Noche</span></div>
+      <span class="hint">Cada turno marca con un clic ✓ si el equipo funciona correctamente, con dos clics ✗ si encontró una inconsistencia (se abre el formulario para describirla) y con tres clics se borra. Una ✗ descrita queda como evidencia y no se puede borrar. Al cumplirse los días, valida y saca el equipo de observación.</span>
+      <div class="obs" id="obs"></div>
+    </section>
+    <section class="card">
+      <div class="card-h"><h2>Bitácora reciente</h2><span class="hint" id="logHint"></span></div>
+      <div class="log" id="log"></div>
+    </section>
+  </div>
+
+  <section class="card">
+    <div class="card-h"><h2>Disponibilidad por sala</h2>
+      <span class="legend" id="salaLeg"></span></div>
+    <span class="hint" id="salaHint">Peor primero · cada cuadro es un equipo (clic para abrirlo) · clic en el nombre de la sala para filtrar la tabla</span>
+    <div id="bySala"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-h"><h2>Equipos</h2><span class="hint" id="countHint"></span></div>
+    <div class="filters">
+      <input type="search" id="q" placeholder="Buscar TAG, sala, marca, falla…" aria-label="Buscar">
+      <select id="fEst" aria-label="Filtrar por estatus"><option value="">Todos los estatus</option></select>
+      <select id="fSala" aria-label="Filtrar por sala"><option value="">Todas las salas</option></select>
+      <select id="fTipo" aria-label="Filtrar por tipo"><option value="">Todos los tipos</option></select>
+      <button type="button" id="fClear">Limpiar</button>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th data-k="tag">TAG</th><th data-k="sala">Sala</th><th data-k="marca">Marca / modelo</th><th data-k="edad">Edad</th>
+          <th data-k="estatus">Estatus</th><th data-k="pct">% Op.</th><th data-k="b1">Circuito 1</th><th data-k="b2">Circuito 2</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </section>
+  <p class="note">El % de operación sigue la fórmula del Excel: 2 circuitos operativos = 100 %, 1 de 2 = 50 %, ninguno = 0 %; un equipo de un circuito es 100 % o 0 %. La disponibilidad excluye los equipos desmantelados.</p>
+</div>
+
+<div id="drawerRoot" hidden>
+  <div class="scrim" id="scrim"></div>
+  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="dTitle"></aside>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+(() => {
+const YEAR = new Date().getFullYear();
+const TIPOS = {CHL:"Chiller",CLT:"Torre de enfriamiento",PMP:"Bomba",ACU:"Unidad de precisión (ACU)",AHC:"Unidad AHC",IRW:"In-row (IRW)"};
+const ESTATUS = ["OPERATIVO","OP CON RESTRICCIÓN","NO OPERATIVO","Desmantelado P-Denver"];
+const S_META = {
+  "OPERATIVO":{cls:"s-ok",c:"var(--ok)",t:"Operativo"},
+  "OP CON RESTRICCIÓN":{cls:"s-warn",c:"var(--warn)",t:"Op. con restricción"},
+  "NO OPERATIVO":{cls:"s-crit",c:"var(--crit)",t:"No operativo"},
+  "DESM":{cls:"s-off",c:"var(--off)",t:"Desmantelado"},
+  "":{cls:"s-na",c:"var(--na)",t:"Sin evaluar"}
+};
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const sKey = e => (e.estatus||"").startsWith("Desm") ? "DESM" : (S_META[e.estatus] ? e.estatus : "");
+const tipo = e => (e.tag||"").slice(0,3).toUpperCase();
+const isBin = b => b === 0 || b === 1;
+function pct(e){
+  if (!isBin(e.b1)) return null;
+  if (!isBin(e.b2)) return e.b1*100;
+  return (e.b1+e.b2)*50;
+}
+// Los in-row (IRW) no tienen circuitos de refrigeración: su estado es el del equipo completo.
+const sinCto = e => tipo(e) === "IRW";
+// Clase de equipo para el inventario. Se puede corregir por equipo en "Editar datos del equipo".
+const CLASES = [
+  {k: "CRAC", t: "CRAC", d: "Precisión expansión directa"},
+  {k: "CRAH", t: "CRAH", d: "Precisión agua helada (in-row)"},
+  {k: "Confort", t: "Confort", d: "Split / comercial"},
+  {k: "Chiller", t: "Chiller", d: "Enfriadores de agua"},
+  {k: "Torre", t: "Torres", d: "Torres de enfriamiento"},
+  {k: "Bomba", t: "Bombas", d: "Circuito agua / primario"}
+];
+const CONFORT_RE = /XRUF|4MXX|MVC-|AUV-|NCP-|CCF-|DC-005/i;
+function clase(e){
+  if (e.clase && CLASES.some(c => c.k === e.clase)) return e.clase;
+  const t = tipo(e);
+  if (t === "CHL") return "Chiller";
+  if (t === "CLT") return "Torre";
+  if (t === "PMP") return "Bomba";
+  if (t === "IRW") return "CRAH";
+  return CONFORT_RE.test(e.modelo || "") ? "Confort" : "CRAC";
+}
+const claseT = k => (CLASES.find(c => c.k === k) || {t: k}).t;
+const enServicio = e => sKey(e) !== "DESM" && pct(e) !== null;
+const suggest = p => p === 100 ? "OPERATIVO" : p === 50 ? "OP CON RESTRICCIÓN" : p === 0 ? "NO OPERATIVO" : "";
+const isoLocal = d => new Date(d.getTime() - d.getTimezoneOffset()*6e4).toISOString().slice(0,10);
+const today = () => isoLocal(new Date());
+const daysAgo = n => isoLocal(new Date(Date.now() - n*864e5));
+const lsPref = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch {} return null; };
+let trendDays = 30;
+let obsList = [];                 // observaciones: {id, tag, inicio, dias, motivo, tipo, estado, cierre, checks}
+const turnos = ["Mañana", "Tarde", "Noche"];
+// Turno en curso según la hora (Mañana 07–15, Tarde 15–23, Noche 23–07; la madrugada cuenta como noche del día anterior).
+function turnoActual(){ const h = new Date().getHours(); return h < 7 ? {fecha: daysAgo(1), i: 2} : h < 15 ? {fecha: today(), i: 0} : h < 23 ? {fecha: today(), i: 1} : {fecha: today(), i: 2}; }
+const addDays = (iso, n) => { const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + n); return isoLocal(d); };
+const obsFin = o => addDays(o.inicio, o.dias - 1);
+const obsActivas = () => obsList.filter(o => o.estado === "activa");
+const obsDe = tag => obsActivas().find(o => o.tag === tag);
+const chkVal = (o, k) => { const v = o.checks && o.checks[k]; return v && v.r ? v.r : null; };
+const fmtD = d => { if(!d) return ""; const [y,m,dd] = d.slice(0,10).split("-"); return `${dd}/${m}/${y}`; };
+
+let equipos = [];   // [{tag,...}]
+let eventos = [];   // [{id,fecha,tag,tipo,circuito,detalle,...}]
+// Modos de acceso: "admin" (con clave) modifica todo; "turno" (sin clave) solo registra la verificación de los equipos en observación.
+let rol = "turno", vista = null;   // sin clave se entra siempre en modo turno
+const esAdmin = () => rol === "admin" && vista !== "turno";
+const puedeTurno = () => rol === "admin" || rol === "turno";
+const MODO_T = {admin: "Modo administrador", turno: "Modo turno", lectura: "Modo turno"};
+function renderModo(){
+  const m = esAdmin() ? "admin" : puedeTurno() ? "turno" : "lectura";
+  const b = $("#modoBadge"); b.hidden = false; b.className = "modo " + m; b.textContent = MODO_T[m] + (vista === "turno" ? " (vista previa)" : "");
+  $("#btnLogin").hidden = Store.mode === "local"; $("#btnLogin").textContent = rol === "admin" ? "Salir de administrador" : "Modo administrador";
+  $("#btnVista").hidden = rol !== "admin"; $("#btnVista").textContent = vista === "turno" ? "Volver a administrador" : "Ver como turno";
+  $("#btnNew").hidden = !esAdmin();
+  if (Store.mode === "local") $("#importLbl").hidden = !esAdmin();
+}
+let sort = {k:"tag",dir:1};
+let openTag = null;
+
+/* ---------- Almacenamiento: Supabase (o este navegador si aún no está configurado) ---------- */
+// 1) Pega aquí la "Project URL" y la clave "anon public" de Supabase (Project Settings → API).
+//    La clave anon es pública por diseño; los permisos los controla la seguridad por filas (RLS) del SQL.
+const SUPABASE_URL = "https://hesppgmhpzqviopitrkm.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_Kk9Bkvo5mg0HxbTSl8f4-Q_pgShydNt";
+
+const LS_E = "kpiclima.equipos", LS_V = "kpiclima.eventos";
+const lsGet = k => { try { return JSON.parse(localStorage.getItem(k) || "[]"); } catch { return []; } };
+const lsSet = (k,v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+// En la base, los circuitos se guardan como número: 1 operativo, 0 fuera de servicio, -1 no aplica, vacío = sin dato.
+const binToDb = b => b === 1 || b === 0 ? b : b === null ? -1 : null;
+const binFromDb = v => v === 1 || v === 0 ? v : v === -1 ? null : "";
+const eqFromRow = r => ({...r, b1: binFromDb(r.b1), b2: binFromDb(r.b2), c1: r.c1 || "", c2: r.c2 || "", marca: r.marca || "", modelo: r.modelo || "", serie: r.serie || "", estatus: r.estatus || ""});
+const eqToRow = e => ({tag: e.tag, sala: e.sala, marca: e.marca, modelo: e.modelo, serie: e.serie, anio: e.anio || null, estatus: e.estatus || "", clase: e.clase || "",
+  c1: e.c1 || "", b1: binToDb(e.b1), c2: e.c2 || "", b2: binToDb(e.b2)});
+const evFromRow = r => ({id: r.id, fecha: r.fecha, tag: r.tag, tipo: r.tipo, circuito: r.circuito, detalle: r.detalle,
+  estatusAntes: r.estatus_antes, estatusDespues: r.estatus_despues, pctAntes: r.pct_antes, pctDespues: r.pct_despues, creado: r.creado, por: r.por_email});
+const evToRow = ev => ({fecha: ev.fecha, tag: ev.tag, tipo: ev.tipo, circuito: ev.circuito, detalle: ev.detalle,
+  estatus_antes: ev.estatusAntes ?? null, estatus_despues: ev.estatusDespues ?? null, pct_antes: ev.pctAntes ?? null, pct_despues: ev.pctDespues ?? null});
+const check = ({error}) => { if (error) throw error; };
+const LS_O = "kpiclima.obs";
+const obsFromRow = (r, vs) => ({id: r.id, tag: r.tag, inicio: r.inicio, dias: r.dias, motivo: r.motivo || "", tipo: r.tipo, estado: r.estado,
+  cierre: r.estado === "cerrada" ? {fecha: r.cerrada_fecha, nota: r.cierre_nota, por: r.cerrada_por} : null,
+  checks: Object.fromEntries(vs.filter(v => v.obs_id === r.id).map(v => [v.fecha + "|" + v.turno, {r: v.resultado, t: v.creado, por: v.por_email, nota: v.nota || ""}]))});
+
+// Cuenta única del administrador (créala en Supabase → Authentication → Users con la clave que elijas). La clave NO va en este archivo.
+const ADMIN_EMAIL = "admin@dcsm-clima.cl";
+const Store = {
+  mode: "pending", sb: null, email: null,
+  async init(){
+    if (SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase){
+      this.mode = "supa";
+      this.sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      const {data} = await this.sb.auth.getSession();
+      await this.setUser(data.session);
+      this.sb.auth.onAuthStateChange((_e, s) => { setTimeout(() => this.setUser(s).then(render), 0); });
+      await this.load();
+      let t;
+      this.sb.channel("kpi-clima")
+        .on("postgres_changes", {event: "*", schema: "public", table: "equipos"}, () => { clearTimeout(t); t = setTimeout(() => this.load(), 400); })
+        .on("postgres_changes", {event: "*", schema: "public", table: "eventos"}, () => { clearTimeout(t); t = setTimeout(() => this.load(), 400); })
+        .on("postgres_changes", {event: "*", schema: "public", table: "observaciones"}, () => { clearTimeout(t); t = setTimeout(() => this.load(), 400); })
+        .on("postgres_changes", {event: "*", schema: "public", table: "verificaciones"}, () => { clearTimeout(t); t = setTimeout(() => this.load(), 400); })
+        .subscribe();
+    } else {
+      this.mode = "local"; rol = "admin";
+      equipos = lsGet(LS_E); eventos = lsGet(LS_V); obsList = lsGet(LS_O);
+      $("#importLbl").hidden = false;
+      setSync(false, "local"); render();
+    }
+  },
+  async setUser(s){
+    this.email = s && s.user ? s.user.email : null;
+    vista = null;
+    // Con la sesión del administrador se habilita todo; sin sesión se entra en modo turno.
+    rol = this.email && this.email.toLowerCase() === ADMIN_EMAIL ? "admin" : "turno";
+  },
+  async entrarAdmin(clave){
+    const {error} = await this.sb.auth.signInWithPassword({email: ADMIN_EMAIL, password: clave});
+    if (error) return false;
+    rol = "admin"; vista = null; this.email = ADMIN_EMAIL;
+    return true;
+  },
+  async salirAdmin(){ await this.sb.auth.signOut(); rol = "turno"; vista = null; this.email = null; },
+  async load(){
+    try {
+      const [e, v, o, vf] = await Promise.all([
+        this.sb.from("equipos").select("*").order("tag"),
+        this.sb.from("eventos").select("*").order("creado", {ascending: false}).limit(1000),
+        this.sb.from("observaciones").select("*").eq("estado", "activa"),
+        this.sb.from("verificaciones").select("*").gte("fecha", daysAgo(60))]);
+      [e, v, o, vf].forEach(check);
+      equipos = e.data.map(eqFromRow); eventos = v.data.map(evFromRow);
+      obsList = o.data.map(r => obsFromRow(r, vf.data));
+      setSync(true);
+    } catch { setSync(false, "error"); }
+    render();
+  },
+  async saveEquipo(e){
+    if (this.mode === "supa"){ check(await this.sb.from("equipos").upsert(eqToRow(e))); return this.load(); }
+    const i = equipos.findIndex(x => x.tag === e.tag);
+    if (i >= 0) equipos[i] = e; else equipos.push(e);
+    lsSet(LS_E, equipos); render();
+  },
+  async deleteEquipo(tag){
+    if (this.mode === "supa"){ check(await this.sb.from("equipos").delete().eq("tag", tag)); return this.load(); }
+    equipos = equipos.filter(x => x.tag !== tag); lsSet(LS_E, equipos); render();
+  },
+  async addEvento(ev){
+    if (this.mode === "supa"){ check(await this.sb.from("eventos").insert(evToRow(ev))); return this.load(); }
+    ev.creado = new Date().toISOString(); ev.id = "ev" + Date.now();
+    eventos.unshift(ev); lsSet(LS_V, eventos); render();
+  },
+  async saveObs(o){
+    if (this.mode === "supa"){ check(await this.sb.from("observaciones").insert({tag: o.tag, inicio: o.inicio, dias: o.dias, motivo: o.motivo, tipo: o.tipo, estado: "activa"})); return this.load(); }
+    o = {...o, id: "ob" + Date.now(), creado: new Date().toISOString()}; obsList.push(o); lsSet(LS_O, obsList); render();
+  },
+  async setCheck(o, key, val, nota){
+    if (this.mode === "supa"){
+      const [fecha, turno] = key.split("|");
+      if (val) check(await this.sb.from("verificaciones").upsert({obs_id: o.id, fecha, turno: Number(turno), resultado: val, nota: nota || ""}));
+      else check(await this.sb.from("verificaciones").delete().eq("obs_id", o.id).eq("fecha", fecha).eq("turno", Number(turno)));
+      return this.load();
+    }
+    o.checks = {...(o.checks || {}), [key]: val ? {r: val, t: new Date().toISOString(), nota: nota || ""} : null}; lsSet(LS_O, obsList); render();
+  },
+  async closeObs(o, nota){
+    if (this.mode === "supa"){ check(await this.sb.from("observaciones").update({estado: "cerrada", cerrada_fecha: today(), cierre_nota: nota || "", cerrada_por: this.email}).eq("id", o.id)); return this.load(); }
+    o.estado = "cerrada"; o.cierre = {fecha: today(), nota: nota || ""}; lsSet(LS_O, obsList); render();
+  },
+  // Todas las observaciones (activas y cerradas) con sus verificaciones por turno, para el respaldo.
+  async allObs(){
+    if (this.mode !== "supa") return obsList;
+    const [o, vf] = await Promise.all([this.sb.from("observaciones").select("*").order("inicio"), this.sb.from("verificaciones").select("*")]);
+    check(o); check(vf);
+    return o.data.map(r => obsFromRow(r, vf.data));
+  },
+  async importAll(eq, ev, ob){
+    equipos = eq; eventos = ev || []; obsList = ob || []; lsSet(LS_E, equipos); lsSet(LS_V, eventos); lsSet(LS_O, obsList); render();
+  }
+};
+
+function setSync(live, code){
+  $("#syncDot").classList.toggle("live", !!live);
+  $("#syncTxt").textContent = live ? (Store.email ? `En línea · ${Store.email}` : "En línea")
+    : code === "local" ? "Supabase sin configurar · datos solo en este navegador" : "Sin conexión con Supabase";
+}
+
+/* ---------- KPIs ---------- */
+function stats(list){
+  const ins = list.filter(enServicio);
+  const disp = ins.length ? ins.reduce((a,e) => a + pct(e), 0) / ins.length : null;
+  let cOk = 0, cTot = 0;
+  ins.filter(e => !sinCto(e)).forEach(e => [e.b1, e.b2].forEach(b => { if (isBin(b)) { cTot++; cOk += b; } }));
+  return {ins, disp, cOk, cTot};
+}
+// Disponibilidad diaria reconstruida hacia atrás desde el estado actual, deshaciendo la bitácora.
+function serie(days){
+  const st = new Map(equipos.map(e => [e.tag, {p: pct(e), desm: sKey(e) === "DESM"}]));
+  const ev = [...eventos].sort((a,b) => (b.fecha + (b.creado||"")).localeCompare(a.fecha + (a.creado||"")));
+  const avg = () => { let n = 0, t = 0; st.forEach(x => { if (!x.desm && x.p !== null && x.p !== undefined){ n++; t += x.p; } }); return n ? t/n : null; };
+  const out = []; let i = 0;
+  for (let k = 0; k < days; k++){
+    const d = daysAgo(k);
+    while (i < ev.length && ev[i].fecha > d){
+      const x = ev[i++], s0 = st.get(x.tag);
+      if (x.tipo === "alta") st.delete(x.tag);
+      else if (s0 && ["falla","reparacion","observacion"].includes(x.tipo)){ if (x.pctAntes !== undefined) s0.p = x.pctAntes; if (x.estatusAntes !== undefined && x.estatusAntes !== null) s0.desm = String(x.estatusAntes).startsWith("Desm"); }
+    }
+    out.push({d, v: avg()});
+  }
+  return out.reverse();
+}
+const FALLAS = [
+  {t: "Compresor", re: /compres|\bcompr\b/i},
+  {t: "Fuga de refrigerante", re: /fuga/i},
+  {t: "Válvula de expansión / EEV", re: /v[áa]lvula de expansi|\beevv?\d?\b|transductor|sens press/i},
+  {t: "Motor evaporador / ventilador", re: /motor|ventilador|fan speed/i},
+  {t: "Control y electrónica", re: /tarjeta|sin control|pantalla|hmi|sensor|fuente de poder|comunicaci|alarm/i},
+  {t: "Bomba: sello mecánico", re: /sello|filtraci/i},
+  {t: "Otras fallas mecánicas", re: /ruido|relleno|cañer|resistencia|man[oó]metro|v[áa]lvula(?! de expansi)/i, salvo: /compres/i}
+];
+// Agrupa los equipos en servicio según el texto de falla de sus circuitos.
+function fallasComunes(){
+  const g = FALLAS.map(f => ({...f, l: []}));
+  equipos.filter(e => sKey(e) !== "DESM").forEach(e => {
+    const txt = [e.c1, e.b2 === null ? "" : e.c2].filter(t => t && !/^\s*operativo[\s.,]*$/i.test(t)).join(" · ");
+    if (!txt) return;
+    g.forEach(f => { if (f.re.test(txt) && !(f.salvo && f.salvo.test(txt))) f.l.push({e, txt}); });
+  });
+  return g.filter(f => f.l.length).sort((a,b) => b.l.length - a.l.length);
+}
+let slideIdx = 0, slideTimer = null, slidePause = false, slideManual = false;
+function renderSlide(){
+  const g = fallasComunes(), el = $("#slide"); if (!el) return;
+  if (!g.length){ el.innerHTML = `<span class="lbl">Fallas comunes</span><span class="sub">Sin fallas registradas en los circuitos.</span>`; return; }
+  slideIdx = ((slideIdx % g.length) + g.length) % g.length;
+  const f = g[slideIdx], ins = equipos.filter(enServicio).length || 1;
+  el.innerHTML = `<div class="sl-h"><span class="lbl">Fallas comunes</span><span class="sl-nav"><button type="button" data-slp aria-pressed="${slideManual}" aria-label="${slideManual ? "Reanudar carrusel" : "Pausar carrusel"}" title="${slideManual ? "Reanudar" : "Pausar"}">${slideManual ? "▶" : "⏸"}</button><button type="button" data-sl="-1" aria-label="Anterior">‹</button>${slideIdx + 1} / ${g.length}<button type="button" data-sl="1" aria-label="Siguiente">›</button></span></div>
+    <div class="sl-body"><span class="sl-name">${esc(f.t)}</span><span class="val">${f.l.length}</span><span class="sub">equipos afectados · ${(f.l.length / ins * 100).toFixed(0)} % de los equipos en servicio</span>
+      <div class="chips">${f.l.sort((a,b) => a.e.tag.localeCompare(b.e.tag)).map(x => `<button type="button" class="chip" data-tag="${esc(x.e.tag)}" title="${esc(x.e.sala)} · ${esc(x.txt)}"><i style="background:${S_META[sKey(x.e)].c}"></i>${esc(x.e.tag)}</button>`).join("")}</div></div>
+    <div class="sl-dots">${g.map((x, i) => `<button type="button" data-si="${i}" aria-label="${esc(x.t)}" aria-current="${i === slideIdx}"></button>`).join("")}</div>`;
+}
+function renderKpis(){
+  const st = stats(equipos);
+  const s30 = serie(31), prev = s30[0].v;
+  const delta = st.disp != null && prev != null ? st.disp - prev : null;
+  $("#kpis").innerHTML = `
+    <div class="kpi main"><span class="lbl">Disponibilidad</span><span class="val">${st.disp == null ? "—" : st.disp.toFixed(1)}<small> %</small></span>
+      <div class="meter"><i style="width:${st.disp||0}%"></i></div>
+      <span class="sub">${delta == null || Math.abs(delta) < 0.05 ? "Sin cambio en 30 días" : `<span class="delta" style="color:${delta > 0 ? "var(--ok)" : "var(--crit)"}">${delta > 0 ? "▲" : "▼"} ${Math.abs(delta).toFixed(1)} pts</span> vs hace 30 días`}</span></div>
+    <div class="kpi"><span class="lbl">Circuitos operativos</span><span class="val">${st.cOk}<small> / ${st.cTot}</small></span>
+      <span class="sub">${st.cTot - st.cOk} circuitos fuera de servicio</span></div>
+    <div class="kpi slide" id="slide" aria-roledescription="carrusel"></div>`;
+  renderSlide();
+  $("#fleetHint").textContent = `${equipos.length} equipos · ${st.ins.length} en servicio`;
+}
+$("#kpis").addEventListener("click", ev => {
+  const t = ev.target.closest("[data-tag]"); if (t) return openDrawer(t.dataset.tag);
+  if (ev.target.closest("[data-slp]")){ slideManual = !slideManual; renderSlide(); return; }
+  const b = ev.target.closest("[data-sl]"); if (b){ slideIdx += Number(b.dataset.sl); renderSlide(); return; }
+  const d = ev.target.closest("[data-si]"); if (d){ slideIdx = Number(d.dataset.si); renderSlide(); }
+});
+$("#kpis").addEventListener("pointerenter", () => { slidePause = true; });
+$("#kpis").addEventListener("pointerleave", () => { slidePause = false; });
+$("#kpis").addEventListener("focusin", () => { slidePause = true; });
+$("#kpis").addEventListener("focusout", () => { slidePause = false; });
+if (!matchMedia("(prefers-reduced-motion: reduce)").matches) slideTimer = setInterval(() => { if (!slidePause && !slideManual && $("#drawerRoot").hidden){ slideIdx++; renderSlide(); } }, 7000);
+
+/* ---------- Inventario por tipo ---------- */
+function renderInv(){
+  $("#inv").innerHTML = CLASES.map(c => {
+    const l = equipos.filter(e => clase(e) === c.k), st = stats(l), n = l.length || 1;
+    const cnt = k => l.filter(e => sKey(e) === k).length;
+    return `<button type="button" class="ic" data-clase="${c.k}" title="Ver ${esc(c.t)} en la tabla">
+      <span class="in">${esc(c.t)}</span><span class="id">${esc(c.d)}</span>
+      <span class="ir"><span class="iv">${l.length}</span><span class="ip" style="color:${st.disp == null ? "var(--muted)" : barColor(st.disp)}">${st.disp == null ? "—" : st.disp.toFixed(0) + " %"}</span></span>
+      <span class="stack">${SKEYS.map(k => cnt(k) ? `<i style="width:${cnt(k)/n*100}%;background:${S_META[k].c}" title="${S_META[k].t}: ${cnt(k)}"></i>` : "").join("")}</span>
+      <span class="ik"><span style="color:var(--ok)"><b>${cnt("OPERATIVO")}</b> op.</span>${cnt("OP CON RESTRICCIÓN") ? `<span style="color:var(--warn)"><b>${cnt("OP CON RESTRICCIÓN")}</b> restr.</span>` : ""}${cnt("NO OPERATIVO") ? `<span style="color:var(--crit)"><b>${cnt("NO OPERATIVO")}</b> no op.</span>` : ""}${cnt("DESM") ? `<span><b>${cnt("DESM")}</b> desm.</span>` : ""}</span>
+    </button>`; }).join("");
+}
+$("#inv").addEventListener("click", ev => { const b = ev.target.closest("[data-clase]"); if (!b) return; $("#fTipo").value = b.dataset.clase; renderTable(); $("#q").scrollIntoView({behavior: "smooth", block: "center"}); });
+
+/* ---------- Gráfica inicial ---------- */
+const SKEYS = ["OPERATIVO","OP CON RESTRICCIÓN","NO OPERATIVO","DESM"];
+function renderDonut(){
+  const cnt = k => equipos.filter(e => sKey(e) === k).length, n = equipos.length || 1;
+  const R = 70, r = 48, cx = 80, cy = 80, gap = 0.012;
+  let a0 = -Math.PI/2, out = "";
+  const arc = (a1, a2) => { const p = (rad, a) => [cx + rad*Math.cos(a), cy + rad*Math.sin(a)], L = a2 - a1 > Math.PI ? 1 : 0;
+    const [x1,y1] = p(R,a1), [x2,y2] = p(R,a2), [x3,y3] = p(r,a2), [x4,y4] = p(r,a1);
+    return `M${x1} ${y1}A${R} ${R} 0 ${L} 1 ${x2} ${y2}L${x3} ${y3}A${r} ${r} 0 ${L} 0 ${x4} ${y4}Z`; };
+  SKEYS.forEach(k => { const c = cnt(k); if (!c) return; const a = c/n*2*Math.PI;
+    out += `<path d="${arc(a0 + gap, a0 + a - gap)}" fill="${S_META[k].c}" data-k="${esc(k)}" tabindex="0"><title>${S_META[k].t}: ${c} (${(c/n*100).toFixed(0)} %)</title></path>`; a0 += a; });
+  out += `<text x="80" y="78" text-anchor="middle" style="font:600 30px var(--f-display);fill:var(--ink)">${equipos.length}</text><text x="80" y="96" text-anchor="middle" style="font:11px var(--f-mono);fill:var(--muted)">equipos</text>`;
+  $("#donut").innerHTML = out;
+  $("#dleg").innerHTML = SKEYS.map(k => `<div><i class="sw" style="background:${S_META[k].c}"></i><span>${S_META[k].t}</span><b>${cnt(k)}</b><em>${(cnt(k)/n*100).toFixed(0)} %</em></div>`).join("");
+}
+function renderTrend(){
+  const svg = $("#trend"), W = Math.max(280, svg.clientWidth || 600), H = 220, m = {l: 38, r: 50, t: 12, b: 24};
+  const data = serie(trendDays), vals = data.map(d => d.v).filter(v => v != null);
+  if (!vals.length){ svg.innerHTML = ""; return; }
+  let lo = Math.floor((Math.min(...vals) - 5) / 10) * 10; lo = Math.max(0, Math.min(lo, 70)); const hi = 100;
+  const X = i => m.l + (W - m.l - m.r) * (data.length === 1 ? 0.5 : i / (data.length - 1));
+  const Y = v => m.t + (H - m.t - m.b) * (1 - (v - lo) / (hi - lo));
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  let g = "";
+  for (let v = lo; v <= hi; v += (hi - lo) > 40 ? 20 : 10) g += `<line class="gl" x1="${m.l}" x2="${W - m.r}" y1="${Y(v)}" y2="${Y(v)}"/><text class="ax" x="${m.l - 6}" y="${Y(v) + 4}" text-anchor="end">${v}%</text>`;
+  const step = Math.ceil(data.length / Math.max(2, Math.min(6, Math.floor((W - m.l - m.r) / 64))));
+  data.forEach((d, i) => { if (i % step === 0 || i === data.length - 1 && (data.length - 1) % step > step/2) g += `<text class="ax" x="${X(i)}" y="${H - 6}" text-anchor="middle">${d.d.slice(8,10)}/${d.d.slice(5,7)}</text>`; });
+  const pts = data.map((d, i) => d.v == null ? null : [X(i), Y(d.v)]).filter(Boolean);
+  const line = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join("");
+  const area = line + `L${pts[pts.length-1][0]} ${Y(lo)}L${pts[0][0]} ${Y(lo)}Z`;
+  const last = data[data.length - 1];
+  g += `<path d="${area}" fill="var(--accent)" fill-opacity=".10"/><path d="${line}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>`;
+  g += `<circle cx="${X(data.length-1)}" cy="${Y(last.v)}" r="4.5" fill="var(--accent)" stroke="var(--panel)" stroke-width="2"/><text x="${X(data.length-1) + 8}" y="${Y(last.v) + 4}" style="font:600 13px var(--f-mono);fill:var(--ink)">${last.v.toFixed(1)}%</text>`;
+  g += `<line id="xh" class="gl" y1="${m.t}" y2="${H - m.b}" style="stroke:var(--muted)" visibility="hidden"/><circle id="xd" r="4" fill="var(--accent)" stroke="var(--panel)" stroke-width="2" visibility="hidden"/><rect x="${m.l}" y="0" width="${W - m.l - m.r}" height="${H}" fill="transparent" id="hit"/>`;
+  svg.innerHTML = g;
+  const tip = $("#tip"), box = $("#trendBox");
+  const move = ev => {
+    const rc = svg.getBoundingClientRect(), x = (ev.clientX - rc.left) * W / rc.width;
+    const i = Math.max(0, Math.min(data.length - 1, Math.round((x - m.l) / (W - m.l - m.r) * (data.length - 1))));
+    const d = data[i]; if (d.v == null) return;
+    svg.querySelector("#xh").setAttribute("x1", X(i)); svg.querySelector("#xh").setAttribute("x2", X(i)); svg.querySelector("#xh").setAttribute("visibility", "visible");
+    const xd = svg.querySelector("#xd"); xd.setAttribute("cx", X(i)); xd.setAttribute("cy", Y(d.v)); xd.setAttribute("visibility", "visible");
+    const br = box.getBoundingClientRect();
+    tip.hidden = false; tip.innerHTML = `${fmtD(d.d)} · <b>${d.v.toFixed(1)} %</b>`;
+    tip.style.left = Math.min(br.width - 70, Math.max(70, rc.left - br.left + X(i) * rc.width / W)) + "px"; tip.style.top = (rc.top - br.top + Y(d.v) * rc.height / H) + "px";
+  };
+  const hit = svg.querySelector("#hit");
+  hit.onpointermove = move; hit.onpointerdown = move;
+  hit.onpointerleave = () => { tip.hidden = true; svg.querySelector("#xh").setAttribute("visibility", "hidden"); svg.querySelector("#xd").setAttribute("visibility", "hidden"); };
+  const changes = eventos.filter(x => x.fecha >= data[0].d && x.pctAntes !== x.pctDespues).length;
+  $("#trendHint").textContent = changes ? `${changes} cambios de operación registrados en el período` : "Aún no hay cambios registrados en el período: la línea parte del estado inicial y se mueve con cada falla o reparación que registres.";
+}
+
+/* ---------- Equipos en observación ---------- */
+let closingObs = null, incObs = null, incPre = null;
+function renderObs(){
+  const hoy = today();
+  const l = obsActivas().sort((a,b) => (hoy > obsFin(b)) - (hoy > obsFin(a)) || a.inicio.localeCompare(b.inicio));
+  $("#obs").innerHTML = l.length ? l.map(o => {
+    const e = equipos.find(q => q.tag === o.tag) || {estatus: ""}, sm = S_META[sKey(e)];
+    const [t, cls] = TIPO_EV[o.tipo] || ["Observación", "o"];
+    const fin = obsFin(o), dia = Math.min(o.dias, Math.round((new Date(hoy) - new Date(o.inicio)) / 864e5) + 1), cumplido = hoy > fin;
+    let ok = 0, bad = 0, tot = o.dias * turnos.length, rows = "";
+    for (let k = 0; k < o.dias; k++){
+      const d = addDays(o.inicio, k), fut = d > hoy;
+      rows += `<span class="vd${d === hoy ? " hoy" : ""}">${d === hoy ? "Hoy" : fmtD(d).slice(0,5)}</span>` + turnos.map((tn, i) => {
+        const key = d + "|" + i, v = chkVal(o, key); if (v === "ok") ok++; if (v === "bad") bad++;
+        const lk = v === "bad" && o.checks[key].nota ? " lock" : "";
+        return `<button type="button" class="vc${v ? " " + v : ""}${lk}${d === hoy ? " hoy" : ""}" data-obs="${esc(o.id)}" data-k="${key}" ${fut || !puedeTurno() ? "disabled" : ""} title="${fmtD(d)} · ${tn}${v === "ok" ? " · correcto" : v === "bad" ? " · inconsistencia" + (o.checks[key].nota ? ": " + esc(o.checks[key].nota) : "") : ""}">${v === "ok" ? "✓" : v === "bad" ? "✗" : ""}</button>`; }).join("");
+    }
+    const closing = closingObs === o.id, inc = incObs === o.id, ta = turnoActual();
+    const incs = Object.entries(o.checks || {}).filter(([, v]) => v && v.r === "bad").sort(([a], [b]) => a.localeCompare(b));
+    const diasOpt = []; for (let k = 0; k < o.dias; k++){ const d = addDays(o.inicio, k); if (d <= hoy) diasOpt.push(d); }
+    return `<div class="ob ${cumplido ? "done" : cls}">
+      <span class="top"><span class="tg"><button type="button" data-tag="${esc(o.tag)}">${esc(o.tag)}</button></span><span class="when">${cumplido ? "Período cumplido" : `Día ${dia} de ${o.dias}`} · hasta ${fmtD(fin).slice(0,5)}</span></span>
+      <span class="hint">${esc(e.sala || "")} · <span class="k ${cls}">${o.tipo === "manual" ? "Observación" : t}</span> del ${fmtD(o.inicio).slice(0,5)}</span>
+      ${o.motivo ? `<p>${esc(o.motivo)}</p>` : ""}
+      <div class="vgrid" style="--nt:${turnos.length}"><span></span>${turnos.map(tn => `<span class="vh">${esc(tn)}</span>`).join("")}${rows}</div>
+      ${incs.length ? `<ul class="incs">${incs.map(([k, v]) => { const [d, i] = k.split("|"); return `<li>⚠ <span>${fmtD(d).slice(0,5)} ${esc(turnos[i] || "")}</span> ${esc(v.nota || "Anomalía sin descripción")}</li>`; }).join("")}</ul>` : ""}
+      <div class="obf"><span class="hint">${ok} de ${tot} ✓${bad ? ` · <b style="color:var(--crit)">${bad} ✗</b>` : ""}</span><span class="pill ${sm.cls}">${sm.t}</span></div>
+      ${puedeTurno() && !closing && !inc ? `<div class="obf"><button type="button" data-inc="${esc(o.id)}">Registrar inconsistencia</button>${esAdmin() ? `<button type="button" class="${cumplido ? "primary" : ""}" data-close="${esc(o.id)}">Sacar de observación</button>` : cumplido ? `<span class="hint">El administrador debe sacarlo de observación</span>` : ""}</div>` : ""}
+      ${inc ? `<form class="closeform" data-incform="${esc(o.id)}"><div class="frow"><label>Día<select id="incDia">${diasOpt.map(d => `<option value="${d}"${d === (incPre ? incPre.d : diasOpt.includes(ta.fecha) ? ta.fecha : diasOpt[diasOpt.length-1]) ? " selected" : ""}>${fmtD(d)}</option>`).join("")}</select></label>
+        <label>Turno<select id="incTurno">${turnos.map((tn, i) => `<option value="${i}"${i === (incPre ? incPre.i : ta.i) ? " selected" : ""}>${tn}</option>`).join("")}</select></label></div>
+        <label>Inconsistencia encontrada<textarea id="incNota" required placeholder="Ej.: Alta presión de descarga, ruido anormal en compresor, alarma de temperatura…"></textarea></label>
+        <div style="display:flex;gap:6px"><button class="primary" type="submit">Guardar inconsistencia</button><button type="button" data-cancel="1">Cancelar</button></div></form>` : ""}
+      ${closing ? `<form class="closeform" data-closeform="${esc(o.id)}"><label>Nota de cierre${cumplido ? "" : " (cierre anticipado)"}<textarea id="closeNota" placeholder="${bad ? "Describe la anomalía y la acción tomada…" : "Ej.: Equipo estable, parámetros normales en todos los turnos."}"></textarea></label>
+        <div style="display:flex;gap:6px"><button class="primary" type="submit">Confirmar salida</button><button type="button" data-cancel="1">Cancelar</button></div></form>` : ""}
+    </div>`; }).join("")
+    : `<div class="empty">Ningún equipo en observación. Al registrar una falla o reparación puedes dejar el equipo en observación de 1 a 7 días.</div>`;
+}
+$("#obs").addEventListener("click", async ev => {
+  const tg = ev.target.closest("[data-tag]"); if (tg) return openDrawer(tg.dataset.tag);
+  const c = ev.target.closest("button[data-obs]");
+  if (c){
+    const o = obsList.find(x => x.id === c.dataset.obs); if (!o) return;
+    const cur = chkVal(o, c.dataset.k), nota = o.checks && o.checks[c.dataset.k] && o.checks[c.dataset.k].nota;
+    if (cur === "bad" && nota) return toast("Inconsistencia registrada: queda como evidencia y no se borra.");
+    const nxt = cur === null ? "ok" : cur === "ok" ? "bad" : null;
+    c.disabled = true;
+    try {
+      await Store.setCheck(o, c.dataset.k, nxt);
+      if (nxt === "bad"){ const [d, i] = c.dataset.k.split("|"); incObs = o.id; incPre = {d, i: Number(i)}; renderObs(); const t = $("#incNota"); if (t) t.focus(); }
+    }
+    catch (err) { toast(errMsg(err)); c.disabled = false; }
+    return;
+  }
+  const cl = ev.target.closest("button[data-close]"); if (cl){ closingObs = cl.dataset.close; incObs = null; renderObs(); const t = $("#closeNota"); if (t) t.focus(); return; }
+  const ib = ev.target.closest("button[data-inc]"); if (ib){ incObs = ib.dataset.inc; incPre = null; closingObs = null; renderObs(); const t = $("#incNota"); if (t) t.focus(); return; }
+  if (ev.target.closest("button[data-cancel]")){ closingObs = null; incObs = null; renderObs(); }
+});
+$("#obs").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  if (ev.target.dataset.incform){
+    const o = obsList.find(x => x.id === ev.target.dataset.incform); if (!o) return;
+    const d = $("#incDia").value, i = Number($("#incTurno").value), nota = $("#incNota").value.trim();
+    try {
+      await Store.setCheck(o, d + "|" + i, "bad", nota);
+      await Store.addEvento({fecha: d, tag: o.tag, tipo: "inconsistencia", circuito: "", detalle: `Turno ${turnos[i]}: ${nota}`});
+      incObs = null; incPre = null; toast("Inconsistencia registrada"); render();
+    } catch (err) { toast(errMsg(err)); }
+    return;
+  }
+  const o = obsList.find(x => x.id === ev.target.dataset.closeform); if (!o) return;
+  const nota = $("#closeNota").value.trim();
+  try {
+    await Store.closeObs(o, nota);
+    await Store.addEvento({fecha: today(), tag: o.tag, tipo: "fin_obs", circuito: "", detalle: nota || `Fin de observación (${o.dias} días)`});
+    closingObs = null; toast(`${o.tag} salió de observación`); render();
+  } catch (err) { toast(errMsg(err)); }
+});
+async function ponerEnObs(tag, inicio, dias, motivo, tipoObs){
+  const prev = obsDe(tag);
+  if (prev) await Store.closeObs(prev, "Reemplazada por un nuevo período de observación");
+  await Store.saveObs({tag, inicio, dias, motivo, tipo: tipoObs, estado: "activa", checks: {}});
+}
+
+/* ---------- Disponibilidad por sala ---------- */
+const barColor = p => p >= 90 ? "var(--ok)" : p >= 60 ? "var(--warn)" : "var(--crit)";
+const tileCls = p => p >= 90 ? "t-ok" : p >= 60 ? "t-warn" : "t-crit";
+const GRUPOS_SALA = [["TORRE 1", "TORRE 2", "Cto Primario TE"]];  // Cto Primario TE = bombas del circuito primario de las torres
+function salaRows(){
+  const g = {};
+  equipos.forEach(e => { const k = e.sala || "—"; (g[k] = g[k] || []).push(e); });
+  let rows = Object.entries(g).map(([k, l]) => ({k, l, ...stats(l), n: l.length, cnt: s => l.filter(e => sKey(e) === s).length}))
+    .filter(r => r.disp != null).sort((a,b) => a.disp - b.disp || a.k.localeCompare(b.k));
+  // Salas que se muestran juntas, en este orden, donde aparezca la peor de ellas.
+  GRUPOS_SALA.forEach(gr => {
+    const idx = rows.map((r, i) => gr.includes(r.k) ? i : -1).filter(i => i >= 0);
+    if (idx.length < 2) return;
+    const miembros = gr.map(k => rows.find(r => r.k === k)).filter(Boolean);
+    const at = idx[0];
+    rows = rows.filter(r => !gr.includes(r.k));
+    rows.splice(at, 0, ...miembros);
+  });
+  return rows;
+}
+function renderSala(){
+  const rows = salaRows(), el = $("#bySala");
+  $("#salaLeg").innerHTML = SKEYS.map(k => `<span><i class="sw" style="background:${S_META[k].c}"></i>${S_META[k].t}</span>`).join("");
+  if (!rows.length){ el.innerHTML = `<div class="empty">Sin datos</div>`; return; }
+  el.innerHTML = `<div class="mosaic2">${rows.map(r => { const fuera = r.cnt("NO OPERATIVO"), rest = r.cnt("OP CON RESTRICCIÓN");
+    return `<div class="tile2 ${tileCls(r.disp)}"><div class="hd"><button type="button" class="sn" data-sala="${esc(r.k)}" title="Filtrar la tabla por ${esc(r.k)}">${esc(r.k)}</button><span class="sv">${r.disp.toFixed(0)}%</span></div>
+      <span class="eqs">${r.l.slice().sort((a,b) => a.tag.localeCompare(b.tag)).map(e => `<button type="button" class="eqd" data-tag="${esc(e.tag)}" style="background:${S_META[sKey(e)].c}" title="${esc(e.tag)} · ${S_META[sKey(e)].t}${pct(e) != null ? " · " + pct(e) + "%" : ""}${obsDe(e.tag) ? " · en observación" : ""}" aria-label="${esc(e.tag)}"></button>`).join("")}</span>
+      <span class="ss">${r.n} equipos${rest ? ` · ${rest} restr.` : ""}${fuera ? ` · ${fuera} fuera` : ""}</span></div>`; }).join("")}</div>`;
+}
+
+/* ---------- Bitácora ---------- */
+const TIPO_EV = {falla:["Falla","f"], reparacion:["Reparación","r"], observacion:["Observación","o"], alta:["Alta de equipo","o"], fin_obs:["Fin de observación","r"], manual:["Observación","o"], inconsistencia:["Inconsistencia","f"]};
+const ctoTxt = c => c === "1" ? "Cto 1" : c === "2" ? "Cto 2" : c === "eq" ? "Equipo completo" : "";
+function evHtml(x, showTag = true){
+  const [t, cls] = TIPO_EV[x.tipo] || [x.tipo, "o"];
+  return `<div class="ev"><span class="d">${fmtD(x.fecha)}</span><div><span class="k ${cls}">${t}</span> ${showTag ? `<b class="mono">${esc(x.tag)}</b>` : ""} <span class="hint">${esc(ctoTxt(x.circuito))}${x.estatusDespues !== undefined && x.estatusDespues !== x.estatusAntes ? ` · ${esc(S_META[sKey({estatus:x.estatusAntes})].t)} → ${esc(S_META[sKey({estatus:x.estatusDespues})].t)}` : ""}</span>${x.detalle ? `<p>${esc(x.detalle)}</p>` : ""}</div></div>`;
+}
+function renderLog(){
+  const l = [...eventos].sort((a,b) => (b.fecha+b.creado).localeCompare(a.fecha+a.creado)).slice(0, 40);
+  $("#log").innerHTML = l.length ? l.map(x => evHtml(x)).join("") : `<div class="empty">Aún no hay registros. Abre un equipo de la tabla y usa “Registrar falla o reparación”.</div>`;
+  $("#logHint").textContent = l.length ? `Últimos ${l.length}` : "";
+}
+
+/* ---------- Tabla ---------- */
+function fillFilters(){
+  const keep = (sel, opts) => { const v = sel.value; sel.length = 1; opts.forEach(([val, t]) => sel.add(new Option(t, val))); sel.value = v; };
+  keep($("#fEst"), SKEYS.map(k => [k, S_META[k].t]));
+  keep($("#fSala"), [...new Set(equipos.map(e => e.sala))].sort((a,b) => a.localeCompare(b, "es")).map(s => [s, s]));
+  keep($("#fTipo"), CLASES.map(c => [c.k, c.t]));
+}
+function ctoCell(b, txt){
+  if (b === null || b === undefined && !txt) return `<span class="cto"><b class="bna"></b><span>N/A</span></span>`;
+  const cls = b === 1 ? "b1" : b === 0 ? "b0" : "bx";
+  return `<span class="cto" title="${esc(txt)}"><b class="${cls}"></b><span>${esc((txt||"").split("\n")[0]) || (b === "" ? "Sin dato" : "")}</span></span>`;
+}
+function renderTable(){
+  const q = $("#q").value.trim().toLowerCase(), fe = $("#fEst").value, fs = $("#fSala").value, ft = $("#fTipo").value;
+  let l = equipos.filter(e =>
+    (!q || [e.tag, e.sala, e.marca, e.modelo, e.serie, e.c1, e.c2, e.estatus].join(" ").toLowerCase().includes(q)) &&
+    (!fe || sKey(e) === fe) && (!fs || e.sala === fs) && (!ft || clase(e) === ft));
+  const val = (e, k) => k === "edad" ? (e.anio ? YEAR - e.anio : -1) : k === "pct" ? (pct(e) ?? -1) : k === "b1" || k === "b2" ? (isBin(e[k]) ? e[k] : -1) : String(e[k] ?? "").toLowerCase();
+  l.sort((a,b) => { const x = val(a, sort.k), y = val(b, sort.k); return (x < y ? -1 : x > y ? 1 : 0) * sort.dir; });
+  $("#tbody").innerHTML = l.map(e => { const p = pct(e), sm = S_META[sKey(e)];
+    return `<tr tabindex="0" data-tag="${esc(e.tag)}"><td class="tag">${esc(e.tag)}</td><td>${esc(e.sala)}</td><td>${esc(e.marca)}<div class="hint">${esc(e.modelo)}</div></td>
+    <td class="num">${e.anio ? `${YEAR - e.anio} a` : "—"}<div class="hint">${e.anio || ""}</div></td>
+    <td><span class="pill ${sm.cls}">${sm.t}</span></td>
+    <td><span class="pct"><span class="meter"><i style="width:${p ?? 0}%;background:${p == null ? "var(--na)" : barColor(p)}"></i></span><span class="num">${p == null ? "—" : p + "%"}</span></span></td>
+    <td>${ctoCell(e.b1, e.c1)}</td><td>${sinCto(e) ? `<span class="hint">Sin circuitos</span>` : e.b2 === null ? `<span class="hint">—</span>` : ctoCell(e.b2, e.c2)}</td></tr>`; }).join("")
+    || `<tr><td colspan="8" class="empty">${equipos.length ? "Ningún equipo coincide con los filtros." : (Store.mode === "local" ? "Supabase aún no está configurado. Usa “Importar JSON” para probar con el respaldo en este navegador." : "Cargando equipos…")}</td></tr>`;
+  $("#countHint").textContent = `${l.length} de ${equipos.length}`;
+  document.querySelectorAll("th").forEach(th => th.textContent = th.textContent.replace(/ [▲▼]$/, "") + (th.dataset.k === sort.k ? (sort.dir > 0 ? " ▲" : " ▼") : ""));
+}
+
+function render(){
+  renderModo(); renderKpis(); renderDonut(); renderTrend(); renderInv(); renderObs(); renderSala(); fillFilters();
+  renderLog(); renderTable();
+  if (openTag && openTag !== "__login" && openTag !== "__new" && !$("#drawerRoot").hidden && !drawerDirty) openDrawer(openTag);
+}
+
+/* ---------- Panel del equipo ---------- */
+let drawerDirty = false;
+function closeDrawer(){ $("#drawerRoot").hidden = true; openTag = null; drawerDirty = false; }
+function binSel(id, v){
+  return `<select id="${id}"><option value="1"${v === 1 ? " selected" : ""}>Operativo (1)</option><option value="0"${v === 0 ? " selected" : ""}>Fuera de servicio (0)</option><option value="na"${v === null ? " selected" : ""}>No aplica (N/A)</option></select>`;
+}
+const readBin = v => v === "1" ? 1 : v === "0" ? 0 : v === "na" ? null : "";
+function estSel(id, v){ return `<select id="${id}">${ESTATUS.map(s => `<option value="${esc(s)}"${s === (v || "OPERATIVO") ? " selected" : ""}>${esc(s)}</option>`).join("")}</select>`; }
+
+function openDrawer(tag){
+  const isNew = tag === null;
+  const e = isNew ? {tag:"", sala:"", marca:"", modelo:"", serie:"", anio:YEAR, estatus:"OPERATIVO", c1:"Operativo", b1:1, c2:"", b2:null} : equipos.find(x => x.tag === tag);
+  if (!e) return closeDrawer();
+  openTag = isNew ? "__new" : tag; drawerDirty = false;
+  const p = pct(e), sm = S_META[sKey(e)];
+  const hist = eventos.filter(x => x.tag === e.tag).sort((a,b) => (b.fecha+b.creado).localeCompare(a.fecha+a.creado));
+  const ro = esAdmin() ? "" : " disabled";
+  const twoCto = isBin(e.b2) || e.b2 === "";
+  $("#drawer").innerHTML = `
+    <div class="dh"><div><div class="eyebrow">${isNew ? "Alta de equipo" : esc(claseT(clase(e))) + " · " + esc(e.sala)}</div>
+      <h3 id="dTitle">${isNew ? "Nuevo equipo" : esc(e.tag)}</h3></div><button type="button" id="dClose" aria-label="Cerrar">Cerrar</button></div>
+    ${!isNew && obsDe(e.tag) ? `<div class="obsnote"><span><b>En observación</b> hasta el ${fmtD(obsFin(obsDe(e.tag)))}</span>${puedeTurno() ? `<button type="button" id="dObsGo">Ver verificaciones / sacar</button>` : ""}</div>` : ""}
+    ${isNew ? "" : `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="pill ${sm.cls}">${sm.t}</span><span class="hint">% operación <b>${p == null ? "—" : p + "%"}</b> · ${esc(e.marca)} ${esc(e.modelo)} · S/N ${esc(e.serie)} · instalado ${e.anio || "—"}</span></div>
+    <div class="ctos">${sinCto(e) ? `
+      <div class="ctobox" style="grid-column:1 / -1"><span class="h">${ctoCell(e.b1, "")} Estado del equipo (sin circuitos de refrigeración)</span><p>${esc(e.c1) || "—"}</p></div>` : e.b2 === null ? `
+      <div class="ctobox" style="grid-column:1 / -1"><span class="h">${ctoCell(e.b1, "")} Circuito (equipo de un circuito)</span><p>${esc(e.c1) || "—"}</p></div>` : `
+      <div class="ctobox"><span class="h">${ctoCell(e.b1, "")} Circuito 1</span><p>${esc(e.c1) || "—"}</p></div>
+      <div class="ctobox"><span class="h">${ctoCell(e.b2, "")} Circuito 2</span><p>${e.b2 === null ? "No aplica" : esc(e.c2) || "—"}</p></div>`}
+    </div>
+    <form id="evForm"><fieldset${ro}><legend>Registrar falla o reparación</legend>
+      <div class="seg" role="radiogroup" aria-label="Tipo de registro">
+        <label><input type="radio" name="evTipo" value="falla" checked> Falla</label>
+        <label><input type="radio" name="evTipo" value="reparacion"> Reparación</label>
+        <label><input type="radio" name="evTipo" value="observacion"> Observación</label>
+      </div>
+      <div class="frow">
+        <label>Fecha<input type="date" id="evFecha" value="${today()}" required></label>
+        <label>Afecta a<select id="evCto">${sinCto(e) ? "" : `<option value="1">Circuito 1</option>${twoCto ? `<option value="2">Circuito 2</option>` : ""}`}<option value="eq">Equipo completo</option></select></label>
+      </div>
+      <label>Detalle<textarea id="evDet" placeholder="Ej.: Fuga en evaporador, compresor en corte, se cambió válvula de expansión…"></textarea></label>
+      <div class="frow"><label class="chk"><input type="checkbox" id="evObs" checked> Dejar en observación</label>
+        <label>Días en observación<select id="evObsDias">${[1,2,3,4,5,6,7].map(d => `<option value="${d}"${d === 3 ? " selected" : ""}>${d} ${d === 1 ? "día" : "días"}</option>`).join("")}</select></label></div>
+      <div class="frow"><label>Estatus resultante<span id="evEstWrap"></span></label><label>% operación resultante<input id="evPct" disabled></label></div>
+      <div><button class="primary" type="submit" id="evSave">Guardar registro</button></div>
+    </fieldset></form>`}
+    <form id="eqForm"><fieldset${ro}><legend>${isNew ? "Datos del equipo" : "Editar datos del equipo"}</legend>
+      <div class="frow">
+        <label>TAG<input id="eqTag" value="${esc(e.tag)}" ${isNew ? "required pattern='[A-Za-z0-9._~:@+-]+' placeholder='ACU-906'" : "disabled"}></label>
+        <label>Sala / ubicación<input id="eqSala" list="salas" value="${esc(e.sala)}" required></label>
+      </div>
+      <div class="frow">
+        <label>Marca<input id="eqMarca" value="${esc(e.marca)}"></label>
+        <label>Modelo<input id="eqModelo" value="${esc(e.modelo)}"></label>
+      </div>
+      <div class="frow">
+        <label>N° de serie<input id="eqSerie" value="${esc(e.serie)}"></label>
+        <label>Año de instalación<input id="eqAnio" type="number" min="1970" max="${YEAR + 1}" value="${e.anio || ""}"></label>
+      </div>
+      <div class="frow"><label>Estatus${estSel("eqEst", e.estatus)}</label>
+        <label>Tipo de equipo<select id="eqClase">${CLASES.map(c => `<option value="${c.k}"${c.k === clase(e) ? " selected" : ""}>${c.t} · ${c.d}</option>`).join("")}</select></label></div>
+      ${!isNew && (sinCto(e) || e.b2 === null) ? `<div class="frow"><label>${sinCto(e) ? "Estado del equipo" : "Circuito"}${binSel("eqB1", e.b1)}</label></div>
+      <label>${sinCto(e) ? "Observación del equipo" : "Observación del circuito"}<textarea id="eqC1">${esc(e.c1)}</textarea></label>
+      <div hidden>${binSel("eqB2", e.b2)}<textarea id="eqC2">${esc(e.c2)}</textarea></div>` : `<div class="frow"><label>Circuito 1${binSel("eqB1", e.b1)}</label><label>Circuito 2${binSel("eqB2", e.b2)}</label></div>
+      <label>Observación circuito 1<textarea id="eqC1">${esc(e.c1)}</textarea></label>
+      <label>Observación circuito 2<textarea id="eqC2">${esc(e.c2)}</textarea></label>`}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:space-between"><button class="primary" type="submit">${isNew ? "Crear equipo" : "Guardar cambios"}</button>
+      ${isNew ? "" : `<button type="button" class="danger" id="eqDel">Eliminar equipo</button>`}</div>
+      <div id="delConfirm" hidden class="note">¿Eliminar ${esc(e.tag)} definitivamente? Su historial se conserva en la bitácora. <button type="button" class="danger" id="eqDelYes">Sí, eliminar</button> <button type="button" id="eqDelNo">Cancelar</button></div>
+    </fieldset></form>
+    <datalist id="salas">${[...new Set(equipos.map(x => x.sala))].map(s => `<option value="${esc(s)}">`).join("")}</datalist>
+    ${isNew ? "" : `<section><h2 style="margin-bottom:8px">Historial</h2><div class="log">${hist.length ? hist.map(x => evHtml(x, false)).join("") : `<div class="empty">Sin registros para este equipo.</div>`}</div></section>`}
+    ${esAdmin() ? "" : `<p class="note">${puedeTurno() ? "Modo turno: puedes registrar la verificación de los equipos en observación. Los cambios del equipo los hace el administrador." : "Para registrar, usa “Iniciar sesión”."}</p>`}`;
+  $("#drawerRoot").hidden = false;
+  $("#dClose").onclick = closeDrawer;
+  $("#drawer").addEventListener("input", () => { drawerDirty = true; }, {once:true});
+
+  if (!isNew){
+    const calc = () => {
+      const t = document.querySelector("input[name=evTipo]:checked").value, c = $("#evCto").value;
+      const n = {...e};
+      const v = t === "falla" ? 0 : t === "reparacion" ? 1 : null;
+      if (v !== null){
+        if (c === "1" || c === "eq") n.b1 = v;
+        if ((c === "2" || c === "eq") && n.b2 !== null) n.b2 = v;
+      }
+      return n;
+    };
+    const upd = () => {
+      const n = calc(), p2 = pct(n), t = document.querySelector("input[name=evTipo]:checked").value;
+      const sug = t === "observacion" ? e.estatus : suggest(p2);
+      $("#evEstWrap").innerHTML = estSel("evEst", sug);
+      $("#evPct").value = p2 == null ? "—" : p2 + " %";
+    };
+    $("#evForm").addEventListener("change", ev => { if (ev.target.id !== "evEst") upd(); });
+    upd();
+    $("#evForm").onsubmit = async ev => {
+      ev.preventDefault();
+      const t = document.querySelector("input[name=evTipo]:checked").value, c = $("#evCto").value, det = $("#evDet").value.trim();
+      const n = calc();
+      const txt = det || (t === "reparacion" ? "Operativo." : "");
+      if (t !== "observacion" && txt){
+        if (c === "1" || c === "eq") n.c1 = txt;
+        if ((c === "2" || c === "eq") && n.b2 !== null) n.c2 = txt;
+      }
+      n.estatus = $("#evEst").value;
+      $("#evSave").disabled = true;
+      try {
+        await Store.saveEquipo(n);
+        const fecha = $("#evFecha").value, obsOn = $("#evObs").checked, dias = Number($("#evObsDias").value);
+        await Store.addEvento({fecha, tag: e.tag, tipo: t, circuito: c, detalle: det + (obsOn ? `${det ? " · " : ""}En observación ${dias} ${dias === 1 ? "día" : "días"}` : ""),
+          estatusAntes: e.estatus || "", estatusDespues: n.estatus, pctAntes: pct(e), pctDespues: pct(n)});
+        if (obsOn) await ponerEnObs(e.tag, fecha, dias, det || TIPO_EV[t][0], t);
+        toast(obsOn ? `Registro guardado · en observación ${dias} ${dias === 1 ? "día" : "días"}` : "Registro guardado"); drawerDirty = false; openDrawer(e.tag);
+      } catch (err) { toast(errMsg(err)); $("#evSave").disabled = false; }
+    };
+    $("#evObs").onchange = () => { $("#evObsDias").disabled = !$("#evObs").checked; };
+    if ($("#dObsGo")) $("#dObsGo").onclick = () => { closeDrawer(); $("#obs").scrollIntoView({behavior: "smooth", block: "start"}); };
+    $("#eqDel").onclick = () => { $("#delConfirm").hidden = false; };
+    $("#eqDelNo").onclick = () => { $("#delConfirm").hidden = true; };
+    $("#eqDelYes").onclick = async () => { try { await Store.deleteEquipo(e.tag); toast(`${e.tag} eliminado`); closeDrawer(); } catch (err) { toast(errMsg(err)); } };
+  }
+  $("#eqForm").onsubmit = async ev => {
+    ev.preventDefault();
+    const tg = isNew ? $("#eqTag").value.trim().toUpperCase() : e.tag;
+    if (isNew && equipos.some(x => x.tag === tg)) return toast(`Ya existe un equipo con TAG ${tg}`);
+    const n = {...e, tag: tg, sala: $("#eqSala").value.trim(), marca: $("#eqMarca").value.trim(), modelo: $("#eqModelo").value.trim(),
+      serie: $("#eqSerie").value.trim(), anio: Number($("#eqAnio").value) || null, estatus: $("#eqEst").value, clase: $("#eqClase").value,
+      b1: readBin($("#eqB1").value), b2: readBin($("#eqB2").value), c1: $("#eqC1").value, c2: $("#eqC2").value};
+    try {
+      await Store.saveEquipo(n);
+      if (isNew) await Store.addEvento({fecha: today(), tag: tg, tipo: "alta", circuito: "", detalle: `${n.marca} ${n.modelo} en ${n.sala}`.trim(), estatusAntes: "", estatusDespues: n.estatus});
+      toast(isNew ? `${tg} creado` : "Cambios guardados"); drawerDirty = false; openDrawer(tg);
+    } catch (err) { toast(errMsg(err)); }
+  };
+}
+const errMsg = err => err && (err.code === "42501" || /row-level security|permission/i.test(err.message || "")) ? "No tienes permiso para guardar. Inicia sesión con tu usuario." : "No se pudo guardar. Revisa tu conexión e inténtalo otra vez.";
+
+let tt;
+function toast(m){ const t = $("#toast"); t.textContent = m; t.hidden = false; clearTimeout(tt); tt = setTimeout(() => t.hidden = true, 2600); }
+
+/* ---------- Exportar / importar ---------- */
+function csv(rows){ return rows.map(r => r.map(v => { const s = String(v ?? ""); return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }).join(";")).join("\r\n"); }
+const binTxt = b => b === null ? "N/A" : b === "" || b === undefined ? "" : b;
+async function save(filename, data){
+  try { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([data])); a.download = filename; a.click(); } catch { toast("Este visor no permite descargas"); }
+}
+$("#btnCsv").onclick = () => {
+  const head = ["TAG","SALA/UBICACIÓN","MARCA","MODELO","N° DE SERIE","Año inst","Años de operación","Estatus","% Operación","Cto 1","Estatus BIN 1","Cto 2","Estatus Bin 2"];
+  const rows = equipos.slice().sort((a,b) => a.tag.localeCompare(b.tag)).map(e => [e.tag, e.sala, e.marca, e.modelo, e.serie, e.anio, e.anio ? YEAR - e.anio : "", e.estatus, pct(e) == null ? "" : pct(e) + "%", e.c1, binTxt(e.b1), e.b2 === null ? "N/A" : e.c2, binTxt(e.b2)]);
+  save(`estado-clima-dcsm-${today()}.csv`, "﻿" + csv([head, ...rows]));
+};
+$("#btnJson").onclick = async () => {
+  let observaciones = obsList;
+  try { if (Store.allObs) observaciones = await Store.allObs(); } catch { toast("No se pudieron leer todas las observaciones; se respaldan las activas."); }
+  save(`respaldo-kpi-clima-${today()}.json`, JSON.stringify({exportado: new Date().toISOString(), equipos, eventos, observaciones}, null, 1));
+};
+$("#importFile").onchange = async ev => {
+  const f = ev.target.files[0]; if (!f) return;
+  try { const j = JSON.parse(await f.text()); const eq = Array.isArray(j) ? j : j.equipos; if (!Array.isArray(eq)) throw 0; await Store.importAll(eq, j.eventos, j.observaciones); toast(`${eq.length} equipos importados`); }
+  catch { toast("El archivo no es un respaldo válido de KPI Clima"); }
+  ev.target.value = "";
+};
+
+/* ---------- Eventos de la página ---------- */
+["#q","#fEst","#fSala","#fTipo"].forEach(s => $(s).addEventListener("input", renderTable));
+$("#fClear").onclick = () => { ["#q","#fEst","#fSala","#fTipo"].forEach(s => $(s).value = ""); renderTable(); };
+document.querySelector("thead").onclick = ev => { const k = ev.target.closest("th")?.dataset.k; if (!k) return; sort = {k, dir: sort.k === k ? -sort.dir : 1}; renderTable(); };
+$("#tbody").onclick = ev => { const tr = ev.target.closest("tr[data-tag]"); if (tr) openDrawer(tr.dataset.tag); };
+$("#tbody").onkeydown = ev => { if (ev.key === "Enter"){ const tr = ev.target.closest("tr[data-tag]"); if (tr) openDrawer(tr.dataset.tag); } };
+$("#bySala").onclick = ev => {
+  const d = ev.target.closest("[data-tag]"); if (d) return openDrawer(d.dataset.tag);
+  const b = ev.target.closest("[data-sala]"); if (b){ $("#fSala").value = b.dataset.sala; renderTable(); $("#q").scrollIntoView({behavior:"smooth", block:"center"}); } };
+$("#trendRange").onclick = ev => { const b = ev.target.closest("button[data-d]"); if (!b) return; trendDays = Number(b.dataset.d);
+  document.querySelectorAll("#trendRange button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); renderTrend(); };
+let rz; window.addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(renderTrend, 150); });
+$("#btnNew").onclick = () => openDrawer(null);
+$("#btnVista").onclick = () => { vista = vista === "turno" ? null : "turno"; closeDrawer(); render(); toast(vista ? "Vista previa del modo turno" : "Modo administrador"); };
+$("#scrim").onclick = closeDrawer;
+document.addEventListener("keydown", ev => { if (ev.key === "Escape" && !$("#drawerRoot").hidden) closeDrawer(); });
+
+
+/* ---------- Acceso de administrador con clave ---------- */
+function openLogin(){
+  openTag = "__login"; drawerDirty = false;
+  $("#drawer").innerHTML = `<div class="dh"><div><div class="eyebrow">Acceso para editar</div><h3 id="dTitle">Modo administrador</h3></div><button type="button" id="dClose">Cerrar</button></div>
+    <form id="loginForm"><fieldset><legend>Clave de administrador</legend>
+      <label>Clave<input type="password" id="loginPass" required autocomplete="current-password"></label>
+      <div><button class="primary" type="submit" id="loginBtn">Entrar</button></div>
+      <p class="hint" id="loginMsg">Sin clave se entra en modo turno: solo se registra la verificación de los equipos en observación.</p>
+    </fieldset></form>`;
+  $("#drawerRoot").hidden = false;
+  $("#dClose").onclick = closeDrawer;
+  $("#loginPass").focus();
+  $("#loginForm").onsubmit = async ev => {
+    ev.preventDefault();
+    $("#loginBtn").disabled = true;
+    const ok = await Store.entrarAdmin($("#loginPass").value);
+    $("#loginBtn").disabled = false;
+    if (!ok){ $("#loginMsg").textContent = "Clave incorrecta."; return; }
+    closeDrawer(); toast("Modo administrador"); render();
+  };
+}
+$("#btnLogin").onclick = async () => { if (rol === "admin"){ await Store.salirAdmin(); closeDrawer(); render(); toast("Modo turno"); } else openLogin(); };
+
+render();
+Store.init();
+})();
+</script>
+
+</body>
+</html>
