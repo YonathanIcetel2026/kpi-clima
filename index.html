@@ -253,6 +253,7 @@ td.num{font-variant-numeric:tabular-nums;font-family:var(--f-mono);font-size:12p
 .ev .k{font-weight:600}
 .ev .k.f{color:var(--crit)}.ev .k.r{color:var(--ok)}.ev .k.o{color:var(--warn)}
 .ev p{margin:2px 0 0;color:var(--muted);overflow-wrap:anywhere}
+.ev .ev-nota{color:var(--muted);overflow-wrap:anywhere;margin-right:6px}
 
 /* Panel lateral */
 .scrim{position:fixed;inset:0;background:rgba(10,20,28,.45);z-index:20}
@@ -843,8 +844,12 @@ function renderSala(){
 const TIPO_EV = {falla:["Falla","f"], reparacion:["Reparación","r"], observacion:["Observación","o"], alta:["Alta de equipo","o"], fin_obs:["Fin de observación","r"], manual:["Observación","o"], inconsistencia:["Inconsistencia","f"]};
 const ctoTxt = c => c === "1" ? "Cto 1" : c === "2" ? "Cto 2" : c === "eq" ? "Equipo completo" : "";
 function evHtml(x, showTag = true){
-  const [t, cls] = TIPO_EV[x.tipo] || [x.tipo, "o"];
-  return `<div class="ev"><span class="d">${fmtD(x.fecha)}</span><div><span class="k ${cls}">${t}</span> ${showTag ? `<b class="mono">${esc(x.tag)}</b>` : ""} <span class="hint">${esc(ctoTxt(x.circuito))}${x.estatusDespues !== undefined && x.estatusDespues !== x.estatusAntes ? ` · ${esc(S_META[sKey({estatus:x.estatusAntes})].t)} → ${esc(S_META[sKey({estatus:x.estatusDespues})].t)}` : ""}</span>${x.detalle ? `<p>${esc(x.detalle)}</p>` : ""}</div></div>`;
+  const [t, cls] = (x.tipo === "observacion" && /^Reemplazo de equipo/.test(x.detalle || "")) ? ["Reemplazo de equipo", "r"] : (TIPO_EV[x.tipo] || [x.tipo, "o"]);
+  const hint = `<span class="hint">${esc(ctoTxt(x.circuito))}${x.estatusDespues !== undefined && x.estatusDespues !== x.estatusAntes ? ` · ${esc(S_META[sKey({estatus:x.estatusAntes})].t)} → ${esc(S_META[sKey({estatus:x.estatusDespues})].t)}` : ""}</span>`;
+  let nota = "", det = x.detalle || "";
+  const m = /^Reemplazo de equipo(?: \[(.*?)\])?: ([\s\S]*)$/.exec(det);
+  if (m && x.tipo === "observacion"){ nota = m[1] || ""; det = m[2]; }
+  return `<div class="ev"><span class="d">${fmtD(x.fecha)}</span><div><span class="k ${cls}">${t}</span> ${showTag ? `<b class="mono">${esc(x.tag)}</b>` : ""} ${nota ? `<span class="ev-nota">${esc(nota)}</span>${det ? `<p>${hint} ${esc(det)}</p>` : ""}` : `${hint}${det ? `<p>${esc(det)}</p>` : ""}`}</div></div>`;
 }
 function renderLog(){
   const l = [...eventos].sort((a,b) => (b.fecha+b.creado).localeCompare(a.fecha+a.creado)).slice(0, 40);
@@ -957,6 +962,17 @@ function openDrawer(tag){
       ${isNew ? "" : `<button type="button" class="danger" id="eqDel">Eliminar equipo</button>`}</div>
       <div id="delConfirm" hidden class="note">¿Eliminar ${esc(e.tag)} definitivamente? Su historial se conserva en la bitácora. <button type="button" class="danger" id="eqDelYes">Sí, eliminar</button> <button type="button" id="eqDelNo">Cancelar</button></div>
     </fieldset></form>
+    ${!isNew && esAdmin() ? `<form id="repForm"><fieldset><legend>Reemplazar equipo (mismo TAG)</legend>
+      <p class="hint">Úsalo cuando el equipo se cambia por uno nuevo y conserva el TAG. Deja el equipo OPERATIVO con sus circuitos en buen estado, actualiza los datos y marca el cambio en la bitácora. El historial anterior se conserva.</p>
+      <div class="frow"><label>Fecha del cambio<input type="date" id="repFecha" value="${today()}" required></label>
+        <label>N° de serie nuevo<input id="repSerie" required></label></div>
+      <div class="frow"><label>Marca nueva<input id="repMarca" value="${esc(e.marca)}"></label>
+        <label>Modelo nuevo<input id="repModelo" value="${esc(e.modelo)}"></label></div>
+      <div class="frow"><label>Año de instalación<input id="repAnio" type="number" min="1970" max="${YEAR + 1}" value="${YEAR}"></label>
+        <label>Proyecto / nota<input id="repNota" value="Proyecto Denver" placeholder="Ej.: Proyecto Denver"></label></div>
+      ${sinCto(e) ? "" : `<div class="frow"><label>Cantidad de circuitos<select id="repCtos"><option value="1"${e.b2 === null ? " selected" : ""}>1 circuito</option><option value="2"${e.b2 === null ? "" : " selected"}>2 circuitos</option></select></label></div>`}
+      <div><button class="primary" type="submit" id="repSave">Registrar reemplazo</button></div>
+    </fieldset></form>` : ""}
     <datalist id="salas">${[...new Set(equipos.map(x => x.sala))].map(s => `<option value="${esc(s)}">`).join("")}</datalist>
     ${isNew ? "" : `<section><h2 style="margin-bottom:8px">Historial</h2><div class="log">${hist.length ? hist.map(x => evHtml(x, false)).join("") : `<div class="empty">Sin registros para este equipo.</div>`}</div></section>`}
     ${esAdmin() ? "" : `<p class="note">${puedeTurno() ? "Modo turno: puedes registrar la verificación de los equipos en observación. Los cambios del equipo los hace el administrador." : "Para registrar, usa “Iniciar sesión”."}</p>`}`;
@@ -1005,6 +1021,24 @@ function openDrawer(tag){
     };
     $("#evObs").onchange = () => { $("#evObsDias").disabled = !$("#evObs").checked; };
     if ($("#dObsGo")) $("#dObsGo").onclick = () => { closeDrawer(); $("#obs").scrollIntoView({behavior: "smooth", block: "start"}); };
+    if ($("#repForm")) $("#repForm").onsubmit = async ev => {
+      ev.preventDefault();
+      const n = {...e, marca: $("#repMarca").value.trim(), modelo: $("#repModelo").value.trim(), serie: $("#repSerie").value.trim(), anio: Number($("#repAnio").value) || null,
+        estatus: "OPERATIVO", b1: 1, b2: null, c1: "Operativo.", c2: ""};
+      const nCtos = $("#repCtos") ? Number($("#repCtos").value) : 0;
+      if (nCtos === 2){ n.b2 = 1; n.c2 = "Operativo."; }
+      else if (!nCtos){ n.b2 = e.b2; n.c2 = e.c2; }   // in-row: sin circuitos de refrigeración
+      const desc = x => [x.marca, x.modelo].filter(Boolean).join(" ") + (x.serie ? ` (serie ${x.serie})` : "");
+      const nota = $("#repNota").value.trim();
+      $("#repSave").disabled = true;
+      try {
+        await Store.saveEquipo(n);
+        await Store.addEvento({fecha: $("#repFecha").value, tag: e.tag, tipo: "observacion", circuito: "eq",
+          detalle: `Reemplazo de equipo${nota ? " [" + nota.replace(/[\[\]]/g, "") + "]" : ""}: ${desc(e) || "anterior"} → ${desc(n)}${nCtos ? ` · ${nCtos} ${nCtos === 1 ? "circuito" : "circuitos"}` : ""}`,
+          estatusAntes: e.estatus || "", estatusDespues: n.estatus, pctAntes: pct(e), pctDespues: pct(n)});
+        toast(`${e.tag} reemplazado`); drawerDirty = false; openDrawer(e.tag);
+      } catch (err) { toast(errMsg(err)); $("#repSave").disabled = false; }
+    };
     $("#eqDel").onclick = () => { $("#delConfirm").hidden = false; };
     $("#eqDelNo").onclick = () => { $("#delConfirm").hidden = true; };
     $("#eqDelYes").onclick = async () => { try { await Store.deleteEquipo(e.tag); toast(`${e.tag} eliminado`); closeDrawer(); } catch (err) { toast(errMsg(err)); } };
